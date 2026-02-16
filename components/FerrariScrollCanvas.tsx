@@ -59,35 +59,32 @@ export default function FerrariScrollCanvas({
         const rect = canvas.getBoundingClientRect();
 
         // Set actual size in memory (scaled to account for extra pixel density).
-        canvas.width = rect.width * dpr;
-        canvas.height = rect.height * dpr;
-
-        // Normalize coordinate system to use css pixels.
-        // ctx.scale(dpr, dpr); 
-        // Actually, for drawImage with full canvas fill, we prefer to just draw to the larger size
-        // to keep it sharp, so we can calculate the fit based on the *scaled* width/height.
+        if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+        }
 
         const canvasWidth = canvas.width;
         const canvasHeight = canvas.height;
 
-        // Object Fit: Contain Logic
+        // Object Fit: Cover Logic
         const imgRatio = img.width / img.height;
         const canvasRatio = canvasWidth / canvasHeight;
 
         let drawWidth, drawHeight, offsetX, offsetY;
 
         if (canvasRatio > imgRatio) {
-            // Canvas is wider than image -> fit by height
-            drawHeight = canvasHeight;
-            drawWidth = img.width * (canvasHeight / img.height);
-            offsetX = (canvasWidth - drawWidth) / 2;
-            offsetY = 0;
-        } else {
-            // Canvas is taller/narrower -> fit by width
+            // Canvas is wider than image -> fit by width (crop top/bottom)
             drawWidth = canvasWidth;
             drawHeight = img.height * (canvasWidth / img.width);
             offsetX = 0;
             offsetY = (canvasHeight - drawHeight) / 2;
+        } else {
+            // Canvas is taller/narrower -> fit by height (crop sides)
+            drawHeight = canvasHeight;
+            drawWidth = img.width * (canvasHeight / img.height);
+            offsetX = (canvasWidth - drawWidth) / 2;
+            offsetY = 0;
         }
 
         ctx.clearRect(0, 0, canvasWidth, canvasHeight);
@@ -105,6 +102,23 @@ export default function FerrariScrollCanvas({
         requestAnimationFrame(() => renderFrame(frameIndex));
     });
 
+    // Handle Resize
+    useEffect(() => {
+        const handleResize = () => {
+            if (isLoaded && images.length > 0) {
+                // Re-render current frame on resize
+                const currentProgress = scrollYProgress.get();
+                const frameIndex = Math.min(
+                    totalFrames - 1,
+                    Math.floor(currentProgress * totalFrames)
+                );
+                requestAnimationFrame(() => renderFrame(frameIndex));
+            }
+        };
+        window.addEventListener("resize", handleResize);
+        return () => window.removeEventListener("resize", handleResize);
+    }, [isLoaded, images, totalFrames, scrollYProgress]);
+
     // Initial draw when loaded
     useEffect(() => {
         if (isLoaded) {
@@ -116,7 +130,7 @@ export default function FerrariScrollCanvas({
     return (
         <canvas
             ref={canvasRef}
-            className="absolute inset-0 w-full h-full object-contain"
+            className="absolute inset-0 w-full h-full object-cover"
         />
     );
 }
